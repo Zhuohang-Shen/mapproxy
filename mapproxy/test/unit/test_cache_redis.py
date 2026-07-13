@@ -164,7 +164,11 @@ class TestRedisErrorHandling:
         cache = self._cache_with_client(self._client_raising(exc()))
         assert cache.is_cached(Tile((0, 0, 1))) is False
         assert cache.load_tile(Tile((0, 0, 1))) is False
-        assert cache.store_tile(self._stored_tile()) is False
+        tile = self._stored_tile()
+        assert cache.store_tile(tile) is False
+        # a failed store must not leave the tile marked stored, otherwise a
+        # fallback cache in a cascade would skip it
+        assert tile.stored is False
         assert cache.remove_tile(Tile((0, 0, 1))) is False
         # metadata loading must not raise
         cache.load_tile_metadata(Tile((0, 0, 1)))

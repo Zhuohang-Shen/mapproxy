@@ -102,8 +102,9 @@ class RedisCache(TileCacheBase):
 
         try:
             log.debug("exists_key, key: %s" % key)
-            # TODO: according to documentation exists returns an Awaitable
-            return cast(bool, self.r.exists(key))
+            # exists() returns an int (0/1); convert to a real bool so the
+            # declared -> bool return type holds and `is False` checks work.
+            return bool(self.r.exists(key))
         except redis.exceptions.TimeoutError as e:
             log.error("REDIS:exists_key timeout error, returning false. %s" % e)
             return False
@@ -123,16 +124,20 @@ class RedisCache(TileCacheBase):
             log.debug("store_key, key: %s" % key)
             # TODO: according to documentation set returns an Awaitable
             r = cast(bool, self.r.set(key, data))
+            if self.ttl:
+                # use ms expire times for unit-tests
+                self.r.pexpire(key, int(self.ttl * 1000))
         except redis.exceptions.TimeoutError as e:
             log.error("REDIS:store_key timeout error, returning false. %s" % e)
+            # tile_buffer() set tile.stored=True; undo it so a fallback cache
+            # in a cascade still attempts to store the tile.
+            tile.stored = False
             return False
         except redis.exceptions.ConnectionError as e:
             log.error("Error during connection %s" % e)
+            tile.stored = False
             return False
 
-        if self.ttl:
-            # use ms expire times for unit-tests
-            self.r.pexpire(key, int(self.ttl * 1000))
         return r
 
     def load_tile(self, tile: Tile, with_metadata=False, dimensions=None) -> bool:
