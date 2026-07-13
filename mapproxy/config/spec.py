@@ -171,6 +171,7 @@ cache_types = {
         'tile_lock_dir': str(),
         'use_http_get': bool(),
         'include_grid_name': bool(),
+        'username': str(),
     }),
     'redis': combined(cache_commons, {
         'host': str(),
@@ -403,6 +404,7 @@ mapproxy_yaml_spec = {
                 'profile_name': str(),
                 'region_name': str(),
                 'endpoint_url': str(),
+                'username': str(),
             },
             'azureblob': {
                 'connection_string': str(),

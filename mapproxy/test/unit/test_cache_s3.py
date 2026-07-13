@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest import mock
+
 import pytest
 
+from mapproxy.cache.tile import Tile
 from mapproxy.extent import MapExtent
 from mapproxy.srs import SRS
 
@@ -91,3 +94,65 @@ class TestS3Cache(TileCacheTestBase):
 
         # raises, if key is missing
         boto3.client("s3").head_object(Bucket=self.bucket_name, Key=key)
+
+    def test_get_bucket_url_self_hosted(self):
+        tile = self.create_tile((0, 0, 1))
+        key = self.cache.tile_key(tile)
+
+        self.cache.endpoint_url = 'http://s3.example.com'
+        self.cache.username = 'myuser'
+        assert self.cache.get_bucket_url(tile) == \
+            'http://s3.example.com/myuser:%s/%s' % (self.bucket_name, key)
+
+        # without a username the segment is omitted
+        self.cache.username = None
+        assert self.cache.get_bucket_url(tile) == \
+            'http://s3.example.com/%s/%s' % (self.bucket_name, key)
+
+    def _http_get_cache(self):
+        # Construct without endpoint_url so __init__'s head_bucket hits the moto
+        # AWS mock; set the self-hosted endpoint afterwards for get_bucket_url.
+        # The HTTP-GET path itself is exercised with _http mocked (no network).
+        cache = S3Cache('mapproxy', file_ext='png', directory_layout='tms',
+                        bucket_name=self.bucket_name, use_http_get=True, _concurrent_writer=1)
+        cache.endpoint_url = 'http://s3.example.com'
+        return cache
+
+    def test_is_cached_http_get(self):
+        cache = self._http_get_cache()
+        tile = Tile((0, 0, 1))
+        resp = mock.Mock(status=200,
+                         headers={'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+                                  'Content-Length': '1234'})
+        with mock.patch('mapproxy.cache.s3._http') as http:
+            http.request.return_value = resp
+            assert cache.is_cached(tile) is True
+            assert http.request.call_args[0][0] == 'HEAD'
+        # metadata parsed from the HTTP response headers
+        assert tile.size == 1234
+        assert tile.timestamp is not None
+
+    def test_is_cached_http_get_missing(self):
+        cache = self._http_get_cache()
+        tile = Tile((0, 0, 1))
+        with mock.patch('mapproxy.cache.s3._http') as http:
+            http.request.return_value = mock.Mock(status=404)
+            assert cache.is_cached(tile) is False
+
+    def test_load_tile_http_get(self):
+        cache = self._http_get_cache()
+        tile = Tile((0, 0, 1))
+        resp = mock.Mock(status=200, data=b'\x89PNG\r\n\x1a\n')
+        with mock.patch('mapproxy.cache.s3._http') as http:
+            http.request.return_value = resp
+            assert cache.load_tile(tile) is True
+            assert http.request.call_args[0][0] == 'GET'
+        assert tile.image_result is not None
+        assert not tile.is_missing()
+
+    def test_load_tile_http_get_missing(self):
+        cache = self._http_get_cache()
+        tile = Tile((0, 0, 1))
+        with mock.patch('mapproxy.cache.s3._http') as http:
+            http.request.return_value = mock.Mock(status=404)
+            assert cache.load_tile(tile) is False

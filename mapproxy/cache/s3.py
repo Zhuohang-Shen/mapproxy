@@ -19,6 +19,7 @@ import hashlib
 import io
 import sys
 import threading
+from email.utils import parsedate_to_datetime
 
 import urllib3
 
@@ -41,7 +42,11 @@ import logging
 log = logging.getLogger('mapproxy.cache.s3')
 
 
-_http = urllib3.PoolManager(block=True)
+# urllib3's default maxsize=1 keeps a single pooled connection per host, so with
+# block=True the concurrent tile fetches issued by load_tiles/store_tiles
+# (async_.Pool) would serialize behind that one connection. Size the pool so the
+# HTTP-GET fan-out isn't throttled to a single connection.
+_http = urllib3.PoolManager(maxsize=10, block=True)
 _s3_sessions_cache = threading.local()
 
 
@@ -82,7 +87,7 @@ class S3Cache(TileCacheBase):
             elif e.response['Error']['Code'] == '403':
                 raise S3ConnectionError('Access denied. Check your credentials')
             else:
-                reraise_exception(
+                raise reraise_exception(
                     S3ConnectionError('Unknown error: %s' % e),
                     sys.exc_info(),
                 )
@@ -118,18 +123,30 @@ class S3Cache(TileCacheBase):
         except Exception as e:
             raise S3ConnectionError('Error during connection %s' % e)
 
-    def load_tile_metadata(self, tile, dimensions=None):
+    def load_tile_metadata(self, tile: Tile, dimensions=None):
         if tile.timestamp:
             return
         self.is_cached(tile, dimensions=dimensions)
 
     def _set_metadata(self, response, tile):
+        # boto3 responses expose LastModified (datetime) / ContentLength (int);
+        # the urllib3 HTTP-GET path passes raw HTTP headers instead, which use
+        # Last-Modified / Content-Length. Handle both so metadata is populated
+        # on either path.
         if 'LastModified' in response:
             tile.timestamp = calendar.timegm(response['LastModified'].timetuple())
-        if 'ContentLength' in response:
-            tile.size = response['ContentLength']
+        elif 'Last-Modified' in response:
+            tile.timestamp = calendar.timegm(parsedate_to_datetime(response['Last-Modified']).timetuple())
 
-    def is_cached(self, tile, dimensions=None):
+        if 'ContentLength' in response:
+            tile.size = int(response['ContentLength'])
+        elif 'Content-Length' in response:
+            try:
+                tile.size = int(response['Content-Length'])
+            except (TypeError, ValueError):
+                pass
+
+    def is_cached(self, tile: Tile, dimensions=None) -> bool:
         if tile.is_missing():
             if self.use_http_get:
                 url = self.get_bucket_url(tile)
@@ -157,11 +174,11 @@ class S3Cache(TileCacheBase):
 
         return True
 
-    def load_tiles(self, tiles: TileCollection, with_metadata=True, dimensions=None):
+    def load_tiles(self, tiles: TileCollection, with_metadata=True, dimensions=None) -> bool:
         p = async_.Pool(min(4, len(tiles)))
         return all(p.map(self.load_tile, tiles))
 
-    def load_tile(self, tile: Tile, with_metadata=True, dimensions=None):
+    def load_tile(self, tile: Tile, with_metadata=True, dimensions=None) -> bool:
         if not tile.is_missing():
             return True
 
