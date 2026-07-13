@@ -110,9 +110,6 @@ class RedisCache(TileCacheBase):
         except redis.exceptions.ConnectionError as e:
             log.error("Error during connection %s" % e)
             return False
-        except Exception as e:
-            log.error("REDIS:exists_key error  %s" % e)
-            return False
 
     def store_tile(self, tile: Tile, dimensions=None) -> bool:
         if tile.stored:
@@ -131,9 +128,6 @@ class RedisCache(TileCacheBase):
             return False
         except redis.exceptions.ConnectionError as e:
             log.error("Error during connection %s" % e)
-            return False
-        except Exception as e:
-            log.error("REDIS:store_key error  %s" % e)
             return False
 
         if self.ttl:
@@ -160,9 +154,6 @@ class RedisCache(TileCacheBase):
         except redis.exceptions.ConnectionError as e:
             log.error("Error during connection %s" % e)
             return False
-        except Exception as e:
-            log.error("REDIS:get_key error  %s" % e)
-            return False
 
     def load_tile_metadata(self, tile: Tile, dimensions=None):
         if tile.timestamp:
@@ -181,7 +172,6 @@ class RedisCache(TileCacheBase):
         except (
             redis.exceptions.TimeoutError,
             redis.exceptions.ConnectionError,
-            Exception,
         ) as e:
             log.error("REDIS:load_tile_metadata error %s" % e)
             # Fail silently so the worker doesn't crash.
@@ -198,7 +188,6 @@ class RedisCache(TileCacheBase):
         except (
             redis.exceptions.TimeoutError,
             redis.exceptions.ConnectionError,
-            Exception,
         ) as e:
             log.error("REDIS:remove_tile error %s" % e)
             return False
