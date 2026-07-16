@@ -52,9 +52,9 @@ if sys.platform == 'win32' or sys.platform == 'darwin':
     proc_class = threading.Thread
     queue_class = queue.Queue
 else:
-    import multiprocessing
-    proc_class = multiprocessing.Process
-    queue_class = multiprocessing.Queue
+    import multiprocess
+    proc_class = multiprocess.Process
+    queue_class = multiprocess.Queue
 
 
 class TileWorkerPool(object):

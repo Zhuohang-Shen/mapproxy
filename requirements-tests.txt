@@ -33,6 +33,7 @@ MarkupSafe==1.1.1
 mock==5.1.0
 more-itertools==10.1.0
 moto==5.0.13
+multiprocess==0.70.19
 mypy==1.18.2
 networkx==3.4.2
 numpy==1.26.4
