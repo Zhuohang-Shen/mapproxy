@@ -1,3 +1,21 @@
+7.0.0 2026-07-17
+~~~~~~~~~~~~~~~~
+
+Breaking:
+
+  - Security Fix: Avoiding path traversals in dimensions parameter.
+    In rare cases, existing cache directories will not be reused and created newly with safe directory names
+
+Maintenance:
+
+  - Raising python version in workflows and docker images to 3.14
+  - Update dependencies
+
+Fixes:
+
+  - Error with transparent PNGs in mixed format
+
+
 6.1.1 2026-06-17
 ~~~~~~~~~~~~~~~~
 
