@@ -53,7 +53,8 @@ if sys.platform == 'win32' or sys.platform == 'darwin':
     queue_class = queue.Queue
 else:
     import multiprocess
-    proc_class = multiprocess.Process
+    from multiprocess import Process
+    proc_class: type[Process] = multiprocess.Process
     queue_class = multiprocess.Queue
 
 
